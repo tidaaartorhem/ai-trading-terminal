@@ -5,3 +5,4 @@ __pycache__/
 .pytest_cache/
 data/market_cache/
 .DS_Store
+.firebase/
