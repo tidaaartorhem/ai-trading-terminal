@@ -28,9 +28,11 @@ def _raise_down(*a, **k):
 def test_build_fails_loudly_with_no_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(market_data, "_http_get", _raise_down)
     monkeypatch.setattr(market_data, "CACHE_DIR", tmp_path / "empty_cache")
+    monkeypatch.setattr(build_main, "ROOT", tmp_path)  # keep real web/public clean
     rc = build_main.main(["prog", "build"])
     assert rc == 1  # non-zero: Stooq unreachable and no cache
-    assert not (ROOT / "web" / "public" / "market.json").exists()
+    # Nothing written anywhere: the tmp out dir is never even created.
+    assert not (tmp_path / "web" / "public" / "market.json").exists()
 
 
 def test_build_usage_error():

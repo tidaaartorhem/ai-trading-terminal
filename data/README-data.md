@@ -23,25 +23,27 @@
 3. Stooq unreachable, no cache -> **fail loudly** (build exits non-zero). Prices are
    never invented, interpolated, or carried over from memory.
 
-## Current status (2026-10-04)
+## Current status (2026-10-25)
 
-Stooq is unreachable from this build environment: every endpoint returns an empty
-reply (TLS handshake completes, then the server closes the connection — no HTTP
-status). This reproduces across `stooq.com` and `stooq.pl`, history and quote
-endpoints, IPv4, curl, and Python urllib. General internet egress works fine
-(google.com returns 200), so this is server-side blocking of this environment's
-egress IP, not a network outage.
+Stooq no longer serves its CSV to this build environment at all: since
+2026-10-25 it answers every history request with HTTP 200 carrying a
+JavaScript browser-verification page instead of CSV (previously, 2026-10-04,
+it returned an empty reply after the TLS handshake). The pipeline treats any
+degraded Stooq answer — network error or non-CSV 200 — as a Stooq failure
+and falls through to Yahoo Finance, then to cache; loud failure happens only
+when all three are exhausted (see `services/market_data.py:fetch` and the
+regression tests in `services/tests/test_market_data_fallback.py`).
 
-Because there is no cache yet, the build exits non-zero per the stale policy, and
-`sample-trades.csv` / `open-positions.csv` are header-only placeholders: their rows
-require real fetched closes and cannot be written without them.
+Latest successful refresh: 2026-10-25 build, Yahoo Finance source, history
+through Friday 2026-10-23 (the latest trading day before that Sunday run),
+`stale: false`. Yahoo's chart API (`query1.finance.yahoo.com/v8/finance/chart/<SYM>`)
+returns real data from this environment with a browser User-Agent; it is the
+standing fallback, not a one-off workaround.
 
-### How to get unblocked
+### How to get unblocked if Yahoo also fails
 
 - Run `python3 services/main.py build` once from an environment Stooq accepts; it
-  will populate `data/market_cache/` and every later run can fall back to cache.
-- Or authorize an alternate real-data source. Noted during this build: Yahoo
-  Finance's chart API (`query1.finance.yahoo.com/v8/finance/chart/<SYM>`) returned
-  HTTP 200 with real data from this environment using a browser User-Agent. It was
-  NOT used — the spec designates Stooq and mandates loud failure over a fallback
-  source — but it is available if the project owner approves a source change.
+  will populate `data/market_cache/` and every later run can fall back to cache
+  (labeled `stale: true` with the cache's real fetch date).
+- With no live source and no cache, the build exits non-zero per the stale
+  policy — prices are never invented, interpolated, or carried over.

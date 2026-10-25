@@ -189,7 +189,15 @@ def _last_bar_date(histories: Dict[str, List[dict]]) -> str:
 
 
 def fetch() -> Tuple[Dict[str, List[dict]], bool, str, str]:
-    """Return (histories, stale, as_of, source). Raises MarketDataError if none."""
+    """Return (histories, stale, as_of, source). Raises MarketDataError if none.
+
+    A Stooq failure of ANY kind — network error, or a 200 response that is
+    not a CSV at all (since 2026-10-25 Stooq answers this environment with a
+    JavaScript browser-verification page, which parses to zero symbols) —
+    falls through to Yahoo Finance, then to cache. Loud failure happens only
+    when every source plus the cache is exhausted, so a degraded Stooq can
+    never again block a refresh that Yahoo or the cache could serve.
+    """
     # 1. Stooq first.
     try:
         text = _http_get(HISTORY_URL)
@@ -199,10 +207,8 @@ def fetch() -> Tuple[Dict[str, List[dict]], bool, str, str]:
         as_of = _last_bar_date(histories)
         write_cache(histories, as_of, "Stooq")
         return histories, False, as_of, "Stooq"
-    except MarketDataError:
-        raise
-    except Exception as exc:  # network or parse failure -> Yahoo fallback
-        print(f"[market_data] Stooq unreachable ({exc}); trying Yahoo Finance…",
+    except Exception as exc:  # network, parse, or non-CSV response -> Yahoo fallback
+        print(f"[market_data] Stooq unusable ({exc}); trying Yahoo Finance…",
               file=sys.stderr)
     # 2. Yahoo Finance fallback.
     try:
